@@ -20,8 +20,8 @@
 
 static int relay_on(void *ctx, bool on_off) {
     relay_t *relay = (relay_t *)ctx;
-    int level = (relay->active_level == RELAY_ACTIVE_HIGH) ? on_off : !on_off;
-    GPIO_WRITE(relay->gpio_pin, level);
+    GPIO_WRITE(relay->gpio_pin,
+        (relay->active_level == RELAY_ACTIVE_HIGH) ? on_off : !on_off);
     relay->state = on_off;
     return 0;
 }

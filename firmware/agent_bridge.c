@@ -374,7 +374,10 @@ static void handle_tool_call(agent_bridge_t *bridge,
             const char *hex = json_get_str(args_json, "color");
             uint8_t r = 0, g = 0, b = 0;
             if (hex && hex[0] == '#' && strlen(hex) >= 7) {
-                sscanf(hex + 1, "%2hhx%2hhx%2hhx", &r, &g, &b);
+                unsigned int ur, ug, ub;
+                if (sscanf(hex + 1, "%2x%2x%2x", &ur, &ug, &ub) == 3) {
+                    r = (uint8_t)ur; g = (uint8_t)ug; b = (uint8_t)ub;
+                }
             }
             int ret = dev->ops.set_color(dev->hw_ctx, r, g, b);
             success = (ret == 0);
