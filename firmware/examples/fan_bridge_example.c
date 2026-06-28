@@ -69,29 +69,36 @@ static void register_devices(agent_bridge_t *bridge) {
 }
 
 /* ================================================================
- *  main — 换传输层只需改下面 #if 1 / #if 0
+ *  main — 多 transport 同时运行
+ *
+ * 设备注册一次, 所有 transport 通道都能控制:
+ *   - HTTP:  curl -X POST http://esp32.local:8080/call -d '{...}'
+ *   - 串口:  python dify_bridge.py --port COM3
+ *   - 可再加 MQTT/WebSocket/蓝牙...
  * ================================================================ */
 void app_main(void) {
     hw_gpio_init();
 
     agent_cfg_t cfg = { .log_cb = log_callback };
     agent_bridge_t *bridge = agent_bridge_init(&cfg);
-    register_devices(bridge);
+    register_devices(bridge);  /* 只注册一次 */
 
-#if 1  /* 方案 A: ESP32 HTTP Server (Agent 直接 HTTP POST) */
-    printf("=== Transport: Dify HTTP Server ===\n");
+    /* 通道 1: HTTP Server (Agent 通过 WiFi 直连) */
     transport_dify_http_t *http = transport_dify_http_create(bridge, 8080);
     transport_dify_http_start(http);
-    /* HTTP server 在独立线程中运行, 主线程可以干别的 */
-    while (1) { vTaskDelay(pdMS_TO_TICKS(1000)); }
 
-#else  /* 方案 B: 串口透传 (PC 端跑 dify_bridge.py) */
-    printf("=== Transport: Serial UART + dify_bridge.py ===\n");
+    /* 通道 2: 串口 UART (PC 端 dify_bridge.py 桥接) */
     transport_serial_t serial;
     transport_serial_init(&serial, bridge, 115200);
+
+    printf("=== AgentBridge running ===\n");
+    printf("  HTTP:  http://<esp32-ip>:8080/call\n");
+    printf("  Serial: %d baud\n", 115200);
+
+    /* 主循环 */
     while (1) {
         agent_bridge_task(bridge);
         vTaskDelay(pdMS_TO_TICKS(10));
     }
-#endif
+}
 }
