@@ -21,6 +21,7 @@
 #include "transport/transport_dify_http.h"
 #include "transport/transport_serial.h"
 #include "transport/transport_mqtt_ha.h"
+#include "transport/transport_websocket.h"
 
 #include <stdio.h>
 
@@ -70,45 +71,23 @@ static void register_devices(agent_bridge_t *bridge) {
 }
 
 /* ================================================================
- *  main — 三通道同时运行
- *
- * 设备注册一次, 三条通道都能控制:
- *   - HTTP:   curl -X POST http://esp32.local:8080/call -d '{...}'
- *   - MQTT:   Home Assistant 自动发现 + 面板控制
- *   - Serial: python dify_bridge.py --port COM3
- *   - 再加 WebSocket/BLE... 设备代码完全不变
+ *  main — 四通道同时运行
  * ================================================================ */
 void app_main(void) {
     hw_gpio_init();
-
     agent_cfg_t cfg = { .log_cb = log_callback };
     agent_bridge_t *bridge = agent_bridge_init(&cfg);
-    register_devices(bridge);  /* 只注册一次 */
+    register_devices(bridge);
 
-    /* 通道 1: HTTP Server */
-    transport_dify_http_t *http = transport_dify_http_create(bridge, 8080);
-    transport_dify_http_start(http);
-
-    /* 通道 2: MQTT → Home Assistant */
-    transport_mqtt_ha_t *mqtt = transport_mqtt_ha_create(bridge,
-        "mqtt://homeassistant.local:1883",  /* broker */
-        "agent_esp32_living_room",          /* client_id */
-        NULL, NULL,                         /* 匿名登录 */
-        "agentbridge");
-    transport_mqtt_ha_start(mqtt);
-
-    /* 通道 3: 串口 UART */
+    transport_dify_http_start(
+        transport_dify_http_create(bridge, 8080));
+    transport_websocket_start(
+        transport_websocket_create(bridge, "ws://192.168.1.100:8080", "esp32_001", true));
+    transport_mqtt_ha_start(
+        transport_mqtt_ha_create(bridge, "mqtt://homeassistant.local:1883", "esp32_lr", NULL, NULL, "agentbridge"));
     transport_serial_t serial;
     transport_serial_init(&serial, bridge, 115200);
 
-    printf("=== AgentBridge running ===\n");
-    printf("  HTTP:   http://<ip>:8080\n");
-    printf("  MQTT:   mqtt://homeassistant:1883\n");
-    printf("  Serial: %d baud\n", 115200);
-
-    while (1) {
-        agent_bridge_task(bridge);
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-}
+    printf("AgentBridge: HTTP:8080 | WS:8080 | MQTT:1883 | Serial:115200\n");
+    while (1) { agent_bridge_task(bridge); vTaskDelay(pdMS_TO_TICKS(10)); }
 }
