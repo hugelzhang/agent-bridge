@@ -22,6 +22,11 @@
 #include "transport/transport_serial.h"
 #include "transport/transport_mqtt_ha.h"
 #include "transport/transport_websocket.h"
+#include "transport/transport_tcp_raw.h"
+#include "transport/transport_coap.h"
+#include "transport/transport_modbus.h"
+#include "transport/transport_espnow.h"
+#include "transport/transport_ble.h"
 
 #include <stdio.h>
 
@@ -79,15 +84,21 @@ void app_main(void) {
     agent_bridge_t *bridge = agent_bridge_init(&cfg);
     register_devices(bridge);
 
-    transport_dify_http_start(
-        transport_dify_http_create(bridge, 8080));
-    transport_websocket_start(
-        transport_websocket_create(bridge, "ws://192.168.1.100:8080", "esp32_001", true));
-    transport_mqtt_ha_start(
-        transport_mqtt_ha_create(bridge, "mqtt://homeassistant.local:1883", "esp32_lr", NULL, NULL, "agentbridge"));
+    /* 软件层 (无需额外硬件) */
+    transport_dify_http_start(transport_dify_http_create(bridge, 8080));
+    transport_websocket_start(transport_websocket_create(bridge, "ws://pc:8080", "esp32_001", true));
+    transport_mqtt_ha_start(transport_mqtt_ha_create(bridge, "mqtt://ha.local:1883", "esp32_lr", NULL, NULL, "ab"));
+    transport_tcp_raw_start(transport_tcp_raw_create(bridge, 9000));
+    transport_coap_start(transport_coap_create(bridge, 5683));
+
+    /* 硬件层 (需相应外设) */
+    /* transport_modbus_start(transport_modbus_create(bridge, 2, 17, 18, 19, 9600)); */
+    /* transport_espnow_start(transport_espnow_create(bridge, NULL)); */
+    /* transport_ble_start(transport_ble_create(bridge, "AgentBridge")); */
+
     transport_serial_t serial;
     transport_serial_init(&serial, bridge, 115200);
 
-    printf("AgentBridge: HTTP:8080 | WS:8080 | MQTT:1883 | Serial:115200\n");
+    printf("AgentBridge: 9 transports available, 5 active\n");
     while (1) { agent_bridge_task(bridge); vTaskDelay(pdMS_TO_TICKS(10)); }
 }
