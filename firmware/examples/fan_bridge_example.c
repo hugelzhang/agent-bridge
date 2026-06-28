@@ -20,6 +20,7 @@
 #include "devices/relay.h"
 #include "transport/transport_dify_http.h"
 #include "transport/transport_serial.h"
+#include "transport/transport_mqtt_ha.h"
 
 #include <stdio.h>
 
@@ -69,12 +70,13 @@ static void register_devices(agent_bridge_t *bridge) {
 }
 
 /* ================================================================
- *  main — 多 transport 同时运行
+ *  main — 三通道同时运行
  *
- * 设备注册一次, 所有 transport 通道都能控制:
- *   - HTTP:  curl -X POST http://esp32.local:8080/call -d '{...}'
- *   - 串口:  python dify_bridge.py --port COM3
- *   - 可再加 MQTT/WebSocket/蓝牙...
+ * 设备注册一次, 三条通道都能控制:
+ *   - HTTP:   curl -X POST http://esp32.local:8080/call -d '{...}'
+ *   - MQTT:   Home Assistant 自动发现 + 面板控制
+ *   - Serial: python dify_bridge.py --port COM3
+ *   - 再加 WebSocket/BLE... 设备代码完全不变
  * ================================================================ */
 void app_main(void) {
     hw_gpio_init();
@@ -83,19 +85,27 @@ void app_main(void) {
     agent_bridge_t *bridge = agent_bridge_init(&cfg);
     register_devices(bridge);  /* 只注册一次 */
 
-    /* 通道 1: HTTP Server (Agent 通过 WiFi 直连) */
+    /* 通道 1: HTTP Server */
     transport_dify_http_t *http = transport_dify_http_create(bridge, 8080);
     transport_dify_http_start(http);
 
-    /* 通道 2: 串口 UART (PC 端 dify_bridge.py 桥接) */
+    /* 通道 2: MQTT → Home Assistant */
+    transport_mqtt_ha_t *mqtt = transport_mqtt_ha_create(bridge,
+        "mqtt://homeassistant.local:1883",  /* broker */
+        "agent_esp32_living_room",          /* client_id */
+        NULL, NULL,                         /* 匿名登录 */
+        "agentbridge");
+    transport_mqtt_ha_start(mqtt);
+
+    /* 通道 3: 串口 UART */
     transport_serial_t serial;
     transport_serial_init(&serial, bridge, 115200);
 
     printf("=== AgentBridge running ===\n");
-    printf("  HTTP:  http://<esp32-ip>:8080/call\n");
+    printf("  HTTP:   http://<ip>:8080\n");
+    printf("  MQTT:   mqtt://homeassistant:1883\n");
     printf("  Serial: %d baud\n", 115200);
 
-    /* 主循环 */
     while (1) {
         agent_bridge_task(bridge);
         vTaskDelay(pdMS_TO_TICKS(10));
