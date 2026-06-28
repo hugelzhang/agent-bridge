@@ -119,6 +119,60 @@ class AgentBridge:
             })
         return tools
 
+    def get_openapi(self, server_url="http://localhost:8080"):
+        """生成 OpenAPI 3.0 规范"""
+        tool_names = []
+        for dev in self.devices.values():
+            actions = []
+            if "on_off" in dev.caps: actions.append("set_power")
+            if "level" in dev.caps: actions.append("set_level")
+            actions.append("get_state")
+            for a in actions:
+                tool_names.append(f"{dev.name}.{a}")
+        return {
+            "openapi": "3.0.0",
+            "info": {
+                "title": "AgentBridge Devices",
+                "version": "1.0.0",
+                "description": "Auto-generated device API"
+            },
+            "servers": [{"url": server_url}],
+            "paths": {
+                "/call": {
+                    "post": {
+                        "operationId": "agent_bridge_call",
+                        "summary": "Execute device tool call",
+                        "requestBody": {
+                            "required": True,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "name": {"type": "string",
+                                                     "enum": tool_names},
+                                            "arguments": {"type": "object"}
+                                        },
+                                        "required": ["name", "arguments"]
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "200": {"description": "Tool result"}
+                        }
+                    }
+                },
+                "/tools": {
+                    "get": {
+                        "operationId": "list_tools",
+                        "summary": "List all tools",
+                        "responses": {"200": {"description": "Tool list"}}
+                    }
+                }
+            }
+        }
+
     def dispatch(self, tool_name, arguments):
         parts = tool_name.rsplit(".", 1)
         if len(parts) != 2:
@@ -164,6 +218,8 @@ class BridgeHandler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/tools":
             self._json(self.bridge.get_tools())
+        elif path == "/openapi.json":
+            self._json(self.bridge.get_openapi())
         elif path == "/health":
             self._json({"status": "ok"})
         else:

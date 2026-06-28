@@ -279,6 +279,14 @@ int agent_bridge_get_tools_json(agent_bridge_t *bridge, char *buf, size_t len);
 int agent_bridge_get_device_list_json(agent_bridge_t *bridge, char *buf, size_t len);
 
 /**
+ * 获取 OpenAPI 3.0 规范 JSON (Dify / 标准 Agent 可直接导入)
+ * @return 实际写入字节数
+ */
+int agent_bridge_get_openapi_json(agent_bridge_t *bridge,
+                                  const char *server_url,
+                                  char *buf, size_t len);
+
+/**
  * 获取版本字符串
  */
 const char *agent_bridge_version(void);

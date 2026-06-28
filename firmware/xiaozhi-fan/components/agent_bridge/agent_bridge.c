@@ -551,6 +551,109 @@ int agent_bridge_get_device_list_json(agent_bridge_t *bridge, char *buf, size_t 
 }
 
 /* ================================================================
+ *  OpenAPI 3.0 规范生成 (Dify / 标准 Agent 可导入)
+ * ================================================================ */
+
+int agent_bridge_get_openapi_json(agent_bridge_t *bridge,
+                                  const char *server_url,
+                                  char *buf, size_t len) {
+    json_writer_t jw;
+    jw_init(&jw, buf, len);
+
+    jw_append(&jw,
+        "{"
+        "\"openapi\":\"3.0.0\","
+        "\"info\":{"
+            "\"title\":\"AgentBridge Devices\","
+            "\"version\":\"1.0.0\","
+            "\"description\":\"Auto-generated device API — "
+            "POST /call with {\\\"name\\\":\\\"<device>.<action>\\\",\\\"arguments\\\":{...}}\""
+        "},"
+        "\"servers\":[{\"url\":\"%s\"}],"
+        "\"paths\":{",
+        server_url);
+
+    /* 通用 /call 端点 — 所有工具共用 */
+    jw_append(&jw,
+        "\"/call\":{"
+            "\"post\":{"
+                "\"operationId\":\"agent_bridge_call\","
+                "\"summary\":\"Execute a device tool call\","
+                "\"requestBody\":{"
+                    "\"required\":true,"
+                    "\"content\":{"
+                        "\"application/json\":{"
+                            "\"schema\":{"
+                                "\"type\":\"object\","
+                                "\"properties\":{"
+                                    "\"name\":{"
+                                        "\"type\":\"string\","
+                                        "\"description\":\"Tool name\","
+                                        "\"enum\":[");
+
+    /* 枚举所有工具名 */
+    int tool_idx = 0;
+    for (int i = 0; i < bridge->device_count; i++) {
+        agent_device_t *dev = bridge->devices[i];
+        const char *actions[] = {"set_power", "set_level", "get_state",
+                                  "set_position", "set_color"};
+        const int caps[] = {AB_CAP_ON_OFF, AB_CAP_LEVEL, -1,
+                            AB_CAP_POSITION, AB_CAP_COLOR};
+        for (int a = 0; a < 5; a++) {
+            if (caps[a] != -1 && !(dev->caps & caps[a])) continue;
+            if (tool_idx++ > 0) jw_append(&jw, ",");
+            jw_append(&jw, "\"%s.%s\"", dev->name, actions[a]);
+        }
+    }
+
+    jw_append(&jw,
+                                    "]"
+                                "},"
+                                "\"arguments\":{"
+                                    "\"type\":\"object\","
+                                    "\"description\":\"Tool arguments\""
+                                "}"
+                            "},"
+                            "\"required\":[\"name\",\"arguments\"]"
+                        "}"
+                    "}"
+                "},"
+                "\"responses\":{"
+                    "\"200\":{\"description\":\"Tool result\"},"
+                    "\"400\":{\"description\":\"Invalid request\"}"
+                "}"
+            "}"
+        "},");
+
+    /* /tools 端点 */
+    jw_append(&jw,
+        "\"/tools\":{"
+            "\"get\":{"
+                "\"operationId\":\"list_tools\","
+                "\"summary\":\"List all available tools\","
+                "\"responses\":{"
+                    "\"200\":{\"description\":\"Tool list\"}"
+                "}"
+            "}"
+        "},");
+
+    /* /health 端点 */
+    jw_append(&jw,
+        "\"/health\":{"
+            "\"get\":{"
+                "\"operationId\":\"health_check\","
+                "\"summary\":\"Health check\","
+                "\"responses\":{"
+                    "\"200\":{\"description\":\"OK\"}"
+                "}"
+            "}"
+        "}");
+
+    jw_append(&jw, "}}");  /* close paths, close root */
+    return (int)jw.len;
+}
+
+/* ================================================================
  *  外部可调用的 tool dispatch (供 transport adapter 使用)
  * ================================================================ */
 
